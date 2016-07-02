@@ -1,25 +1,147 @@
----
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
----
+# Reproducible Research: Peer Assessment 1
 
-
+****
 ## Loading and preprocessing the data
-
-
-
+```{r loaddata,echo=TRUE}
+data <- read.csv("activity.csv")
+data$date <- as.Date(data$date) ## convert character *date* to *date object*
+str(data)
+summary(data)
+```
+****
 ## What is mean total number of steps taken per day?
+```{r meantotalsteps,echo=TRUE}
+### tapply used to return a vector with the sum of steps for each day
+### (the dimension names are the dates)
+totalStepsByDay <- tapply(data$steps,data$date,sum)
+totalStepsByDayMean <- mean(totalStepsByDay,na.rm=TRUE)
+totalStepsByDayMedian <- median(totalStepsByDay,na.rm=TRUE)
+hist(totalStepsByDay,
+     main="Total Steps By Day",
+     xlab="total steps by day")
+abline(v=totalStepsByDayMean,col="blue",lwd=2,lty="dashed")
+abline(v=totalStepsByDayMedian,col="yellow",lwd=2,lty="dashed")
+```
+
+### Total steps mean  : 
+```{r,echo=TRUE} 
+mean(totalStepsByDay,na.rm=TRUE)
+```
+### Total steps median: 
+```{r,echo=TRUE} 
+median(totalStepsByDay,na.rm=TRUE)
+```
 
 
-
+****
 ## What is the average daily activity pattern?
+### 1. Time series plot of average daily activity pattern
+```{r averageactivity1, echo=TRUE}
+## tapply used to return a vector with the mean of steps for each interval,
+## accross all dates
+## (the dimension names are the intervals)
+avgStepsByInterval <- tapply(data$steps,data$interval,mean,na.rm=TRUE)
+plot(names(avgStepsByInterval),avgStepsByInterval,type="l",
+     main="Average Daily Activity Pattern",
+     ylab="Average Number Of Steps",
+     xlab="Intervals")
+```
+### 2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r averageactivity2, echo=TRUE}
+## the function "which.max" returns the index in the vector where the
+## maximum number of averaged steps are found in the vector, and
+## the "names" function return the named interval.
+```
+### Interval with maximum average of steps: 
+```{r,echo=TRUE} 
+names(which.max(avgStepsByInterval))
+```
 
 
-
+****
 ## Imputing missing values
+### 1. Total number of missing values in dataset
+Although there are only missing values in the "steps" column, I used the 
+*complete.cases* function because they required **missing values in dataset** and not in a specific column
+```{r imputingmissing1}
+data2 <- data ## create a new data frame to work the missing values
+indexMissingValuesInData <- complete.cases(data) ## index the complete cases
+## used the function table to calculate missing and non missing values, 
+## but printed only the number for missing as required
+```
+### Total of rows with missing values: 
+```{r,echo=TRUE} 
+table(indexMissingValuesInData)["FALSE"]
+```
 
+### 2. Filling in all of the missing values in the dataset
+The strategy used to fill the missing values is substitute de NAs with then 
+*mean* of each interval accross all days, reusing the vector 
+*avgStepsByInterval* created in a previous section of the assignment.
+The code for this strategy is in the next section.
+### 3. Create a new dataset ...
+```{r imputingmissing2}
+## print summary of original dataset
+summary(data)
+## create new column in data frame to indicate where information is missing or 
+## not. "TRUE" indicates a missing value, "FALSE" indicates the opposite
+data2$missing <- !indexMissingValuesInData ## "not" to preserve meaning
+## below is a for loop to fill the missing values with the mean of each
+## interval accross all days
+for (i in 1:nrow(data2)) {
+        if (data2[i,"missing"]) {
+                data2[i,"steps"] <- 
+                        avgStepsByInterval[as.character(data2[i,"interval"])]
+        }
+}
+## print summary of new dataset with missing values filled
+summary(data2)
+```
+### 4. Make a histogram of the total number of steps taken each day after imputation of missing values
+```{r meantotalsteps2,echo=TRUE}
+### tapply used to return a vector with the sum of steps for each day
+### (the dimension names are the dates)
+totalStepsByDayData2 <- tapply(data2$steps,data2$date,sum)
+hist(totalStepsByDayData2,
+     main="Total Steps By Day (imputing NAs)",
+     xlab="total steps by day")
+```
+### Total steps mean (imputing NAs):
+```{r,echo=TRUE}
+mean(totalStepsByDayData2)
+```
+### Total steps median (imputing NAs):
+```{r, echo=TRUE}
+median(totalStepsByDayData2)
+```
+### Difference and impact
+The *mean* and *median* values differ from the ones obtained in the first part of the assignment, but only slightly. The real impact was in the frequency of steps in the histogram.
 
-
+****
 ## Are there differences in activity patterns between weekdays and weekends?
+### 1. Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+```{r,echo=TRUE}
+data3 <- data
+week <- c("weekend",rep("weekday",5),"weekend") ## vector to provide factors
+## define function to calculate weekday/weekend 
+weekfun <- function(x) { 
+        ## add 1 to wday (0-6 range) to make it compatible with vector range (1-7)
+        week[as.POSIXlt(x)$wday+1] 
+} 
+## use *sapply* to apply previous function to all dates 
+data3$week <- sapply(data3$date,weekfun,USE.NAMES=FALSE)
+data3$week <- factor(data3$week) ## transform into factors
+str(data3) ## show that the new data frame has a factor weekday|weekend
+## create data frame to hold average of steps by interval by week
+data4 <- aggregate(steps ~ week + interval,data=data3,FUN=mean)
+```
+### 2. Panel plot comparing weekends and weekdays activity pattern
+```{r,echo=TRUE}
+library(lattice)
+xyplot(steps~interval|week,data4,
+       type="l",
+       layout=c(1,2),
+       main="Weekends X Weekdays Activity Pattern",
+       ylab="Average number of steps",
+       xlab="Interval")
+```
